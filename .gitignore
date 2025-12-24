@@ -1,30 +1,62 @@
-cat <<EOF > .gitignore
-# 隐私与配置
+# --- [ 1. 敏感配置与隐私 ] ---
 **/config.toml
+**/*config*.toml
+**/config*.toml.*
 **/.env
+**/.env.*
+*.confirmed
 **/auth.json
 
-# 媒体与临时文件 (B站插件生成)
+# --- [ 2. KaTeX 与静态资源 (解决 39efc6 问题) ] ---
+**/KaTeX_*.woff2
+**/KaTeX_*.woff
+**/KaTeX_*.ttf
+**/KaTeX_*.otf
+**/node_modules/
+
+# --- [ 3. B站插件生成的媒体文件 ] ---
 *.mp4
 *.m4s
 *.jpg
 *.png
+*.jpeg
+*.gif
+*.webp
+temp/
 **/temp/
-**/data/bilibili/
 
-# Python 环境与缓存
+# --- [ 4. 环境与缓存 ] ---
 **/__pycache__/
+*.py[cod]
 .venv/
 venv/
-build/
-dist/
-*.pyc
+.cache/
+.vscode/
+.idea/
+*.rpm
+*.lock
 
-# 日志
+# --- [ 5. 日志与统计 ] ---
 **/logs/
 *.log
+maibot_statistics.html
 
-# 系统
-.DS_Store
-Thumbs.db
-EOF
+# 忽略所有 SQLite 数据库及相关缓存
+*.db
+*.db-shm
+*.db-wal
+**/data/*.db
+
+# --- [ 运行数据与知识库 ] ---
+**/MaiBot/data/
+**/MaiBot/depends-data/
+*.parquet
+*.index
+*.graphml
+*.parquet
+*.json
+*.js
+*.ico
+*.css
+*.html
+
