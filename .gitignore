@@ -1,0 +1,30 @@
+cat <<EOF > .gitignore
+# 隐私与配置
+**/config.toml
+**/.env
+**/auth.json
+
+# 媒体与临时文件 (B站插件生成)
+*.mp4
+*.m4s
+*.jpg
+*.png
+**/temp/
+**/data/bilibili/
+
+# Python 环境与缓存
+**/__pycache__/
+.venv/
+venv/
+build/
+dist/
+*.pyc
+
+# 日志
+**/logs/
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db
+EOF
