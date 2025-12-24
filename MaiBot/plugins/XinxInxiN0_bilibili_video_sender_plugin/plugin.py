@@ -13,7 +13,6 @@ import urllib.request
 import subprocess
 import shutil
 import aiohttp
-import base64
 
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -65,7 +64,7 @@ from src.plugin_system.base.component_types import (
     MaiMessages,
 )
 from src.plugin_system.apis.plugin_register_api import register_plugin
-from src.plugin_system.apis import send_api, llm_api
+from src.plugin_system.apis import send_api
 
 
 class FFmpegManager:
@@ -1555,52 +1554,6 @@ class BilibiliAutoSendHandler(BaseEventHandler):
             self._logger.error(f"Group video sending error: {e}")
             return False
 
-    def _file_to_base64(self, file_path: str) -> str:
-        """图片转Base64"""
-        with open(file_path, "rb") as f:
-            return base64.b64encode(f.read()).decode('utf-8')
-
-    def _extract_frames(self, video_path: str, frame_count: int = 6, duration: Optional[float] = None) -> List[str]:
-        """视频均匀抽帧"""
-        try:
-            frames_paths = []
-            ffmpeg_path = _ffmpeg_manager.get_ffmpeg_path()
-            video_duration = duration or BilibiliParser.get_video_duration(video_path) or 60
-            
-            interval = video_duration / (frame_count + 1)
-            for i in range(1, frame_count + 1):
-                timestamp = i * interval
-                frame_path = video_path.rsplit('.', 1)[0] + f"_frame_{i}.jpg"
-                cmd = [
-                    ffmpeg_path, '-ss', str(timestamp), '-i', video_path,
-                    '-vframes', '1', '-vf', 'scale=640:-1', '-q:v', '2', '-y', frame_path
-                ]
-                subprocess.run(cmd, capture_output=True)
-                if os.path.exists(frame_path):
-                    frames_paths.append(frame_path)
-            return frames_paths
-        except Exception as e:
-            self._logger.error(f"抽帧失败: {e}")
-            return []
-
-    async def _analyze_with_qwen_thinking(self, frame_paths: List[str], title: str) -> str:
-        """调用 SiliconFlow Qwen3-Thinking"""
-        api_key = self.get_config("siliconflow.api_key", "")
-        model = self.get_config("siliconflow.model", "Qwen/Qwen3-VL-32B-Thinking")
-        
-        url = "https://api.siliconflow.cn/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        content = [{"type": "text", "text": f"你是一个深度视频分析助手。请分析视频《{title}》的这些截图，总结核心内容并给出3个深层看点。请先深度思考再回答。"}]
-        
-        for path in frame_paths:
-            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{self._file_to_base64(path)}"}})
-
-        payload = {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": 2048}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as resp:
-                res_json = await resp.json()
-                return res_json["choices"][0]["message"]["content"]
-
     async def execute(self, message: MaiMessages) -> Tuple[bool, bool, str | None]:
         
         if not self.get_config("plugin.enabled", True):
@@ -1997,35 +1950,6 @@ class BilibiliAutoSendHandler(BaseEventHandler):
         elif enable_duration_limit and video_duration is None:
             self._logger.warning("Duration limit enabled but ffprobe unavailable, skipping duration check")
         
-        # ... (前面的时长判定 if/elif 逻辑) ...
-        if enable_duration_limit and video_duration is not None:
-            if video_duration > max_video_duration:
-                # 超长拦截...
-                return self._make_return_value(True, True, "视频时长超过限制")
-            else:
-                self._logger.debug(f"Video duration check passed")
-        elif enable_duration_limit and video_duration is None:
-            self._logger.warning("Duration limit enabled but ffprobe unavailable, skipping duration check")
-
-        # === [AI 视觉总结逻辑：放在判定完全结束后] ===
-        try:
-            await self._send_text("🧠 Qwen-Thinking 正在深度分析视频画面...", stream_id)
-            # 抽帧分析
-            # 这里的 video_duration 变量在上方已经定义过，直接传进去
-            frames = await loop.run_in_executor(None, lambda: self._extract_frames(temp_path, duration=video_duration))
-            if frames:
-                summary = await self._analyze_with_qwen_thinking(frames, info.title)
-                await self._send_text(f"📖 **AI 深度视觉总结报告**：\n\n{summary}", stream_id)
-                for f in frames:
-                    if os.path.exists(f): os.remove(f)
-        except Exception as e:
-            self._logger.error(f"AI 总结异常: {e}")
-        # === [总结逻辑结束] ===
-
-        # 检查视频文件大小和时长...
-        video_size_mb = os.path.getsize(temp_path) / (1024 * 1024)
-
-
         # 检查视频文件大小和时长，决定处理策略
         video_size_mb = os.path.getsize(temp_path) / (1024 * 1024)
         self._logger.debug(f"Detected video size: {video_size_mb:.2f}MB")
